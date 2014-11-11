@@ -15,6 +15,25 @@
   }
 }(this, function (mustache) {
 
+  // keep track of sibling count at each level
+  var MOUNT_DEPTH = null;
+  var SIBLINGS_AT_DEPTH = [];
+  var MOD = 65521;
+
+  // This is a clean-room implementation of adler32 designed for detecting
+  // if markup is not what we expect it to be. It does not need to be
+  // cryptographically strong, only reasonably good at detecting if markup
+  // generated on the server is different than that on the client.
+  function adler32(data) {
+    var a = 1;
+    var b = 0;
+    for (var i = 0; i < data.length; i++) {
+      a = (a + data.charCodeAt(i)) % MOD;
+      b = (b + a) % MOD;
+    }
+    return a | (b << 16);
+  }
+
   var Object_toString = Object.prototype.toString;
   var isArray = Array.isArray || function (object) {
     return Object_toString.call(object) === '[object Array]';
@@ -59,7 +78,7 @@
   var spaceRe = /\s+/;
   var equalsRe = /\s*=/;
   var curlyRe = /\s*\}/;
-  var tagRe = /#|\^|\/|>|\{|&|=|!/;
+  var tagRe = /#|\^|\/|>|\{|&|=|!|\%/;
 
   /**
    * Breaks up the given `template` string into a tree of tokens. If the `tags`
@@ -454,7 +473,6 @@
     var token, value;
     for (var i = 0, numTokens = tokens.length; i < numTokens; ++i) {
       token = tokens[i];
-
       switch (token[0]) {
       case '#':
         value = context.lookup(token[1]);
@@ -518,6 +536,24 @@
       case 'text':
         buffer += token[1];
         break;
+      case '%':
+        if (token[1] === 'o') {
+          MOUNT_DEPTH = MOUNT_DEPTH === null ? 0 : (MOUNT_DEPTH + 1);
+          if (MOUNT_DEPTH !== SIBLINGS_AT_DEPTH.length) {
+            SIBLINGS_AT_DEPTH.pop();
+          }
+
+          SIBLINGS_AT_DEPTH[MOUNT_DEPTH] = SIBLINGS_AT_DEPTH[MOUNT_DEPTH] === undefined ? 0 : (SIBLINGS_AT_DEPTH[MOUNT_DEPTH] + 1);
+          var reactId = '';
+          // DONT USE i VARIABLE
+          for (var t = 0, l = SIBLINGS_AT_DEPTH.length; t < l; t++) {
+            reactId += (SIBLINGS_AT_DEPTH[t].toString(36) + '.');
+          }
+          buffer += ' data-reactid="' + reactId + '"';
+        } else if (token[1] === 'c') {
+          MOUNT_DEPTH--;
+        }
+        break;
       }
     }
 
@@ -552,7 +588,10 @@
    * default writer.
    */
   mustache.render = function (template, view, partials) {
-    return defaultWriter.render(template, view, partials);
+    var html = defaultWriter.render(template, view, partials);
+    var checksum = adler32(html);
+    html = html.replace(/(data\-reactid\=[\'|\"][a-z0-9\.]*[\'\"])/, "$1 data-react-checksum=\"" + checksum + "\"");
+    return html;
   };
 
   // This is here for backwards compatibility with 0.4.x.

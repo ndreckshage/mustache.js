@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="./mustache.js"></script>
+  </head>
+  <body>
+    <div id="target"></div>
+    <script>
+      var template = ""+
+        "<div{{%o}}>"+
+          "<div{{%o}}>"+
+            "<p{{%o}}>Hi</p{{%c}}>"+
+            "{{#arr}}"+
+              "<p{{%o}}>"+
+                "<span{{%o}}>{{txt}}</span{{%c}}>"+
+              "</p{{%c}}>"+
+            "{{/arr}}"+
+          "</div{{%c}}>"+
+        "</div{{%c}}>";
+      Mustache.parse(template);
+      var arr = [];
+      for (var i = 0; i < 30; i++) {
+        arr.push({ txt: 'Hi there!' });
+      }
+      var rendered = Mustache.render(template, { arr: arr });
+      document.getElementById('target').innerHTML = rendered;
+    </script>
+  </body>
+</html>
